@@ -1,4 +1,4 @@
-# Mach-III
+# HoosHealthy
 
 To run web application:
 
