@@ -3,3 +3,4 @@
 /.idea*
 mach3/.idea*
 mach3/mach3/local_settings.py
+/hooshealthy-venv
