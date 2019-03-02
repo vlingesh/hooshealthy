@@ -28,4 +28,3 @@ To run web application:
 	
 	```localhost:8000/<path>```
 		
-# hooshealthy
