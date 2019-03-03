@@ -325,7 +325,6 @@ def get_text_data(img):
 
 def prediction(img):
     get_text_data(img)
-    '''
     data = pd.read_csv('Tesseract/output.csv')
     data = data.apply(pd.to_numeric, errors='coerce')
     print('-------------------------- Data columns: --------------------------')
@@ -359,6 +358,5 @@ def prediction(img):
     score = clf.predict(data_prepared)
     print(score[0])
     return score[0]
-    '''
 
 prediction("img.jpg")
