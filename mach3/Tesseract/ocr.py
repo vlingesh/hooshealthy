@@ -23,8 +23,29 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, VotingClassifier, ExtraTreesClassifier
 from sklearn.neural_network import MLPClassifier
+from google.cloud import vision
+import io
 
 score_conversion = {'A': 2, 'B': 2, 'C': 1, 'D': 0, 'E': 0, 0: -1}
+features = ['Calcium', 'Carbohydrate', 'Cholesterol', 'Dietary fiber', 'Energy',
+   'Fat', 'Iron', 'Potassium', 'Proteins', 'Salt', 'Saturated fat',
+   'Sodium', 'Trans fat', 'Vitamin A', 'Vitamin B12 (cobalamin)',
+   'Vitamin B2 (Riboflavin)', 'Vitamin C (ascorbic acid)', 'Vitamin D',
+   'Energy from fat', 'Monounsaturated fat', 'Polyunsaturated fat',
+   'Sugars', 'Vitamin B1 (Thiamin)', 'Vitamin B3 / Vitamin PP (Niacin)',
+   'Vitamin B6 (Pyridoxin)', 'Vitamin B9 (Folic acid)', 'Zinc',
+   'Phosphorus', 'Alcohol', 'Folates (total folates)', 'Magnesium',
+   '&nbsp;  Insoluble fiber', 'Biotin', 'Chromium', 'Copper', 'Iodine',
+   'Manganese', 'Molybdenum',
+   'Pantothenic acid / Pantothenate (Vitamin B5)', 'Selenium', 'Vitamin E',
+   'Vitamin K', '&nbsp;  Soluble fiber', 'Cocoa (minimum)',
+   'Sugar alcohols (Polyols)',
+   '\"Fruits, vegetables and nuts (estimate from ingredients list)\"',
+   '\"Fruits, vegetables and nuts (minimum)\"', 'FIBRA DIETÉTICA', 'Starch',
+   'Caffeine', 'Erythritol', 'Allulose', 'Omega 3 fatty acids',
+   'Omega 6 fatty acids', '&nbsp;  Lactose',
+   'Carbon footprint / CO2 emissions', 'Ecological footprint',
+   'added sugars', '&nbsp;  Alpha-linolenic acid / ALA (18:3 n-3)']
 
 # data clean
 def data_cleanup(data):
@@ -191,37 +212,64 @@ def edits2(word):
     "All edits that are two edits away from `word`."
     return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 
-def get_test_data(img):
-    client=boto3.client('rekognition')
+def google_recog(path):
+    client = vision.ImageAnnotatorClient()
+
+    with io.open(path, 'rb') as image_file:
+        content = image_file.read()
+
+    image = vision.types.Image(content=content)
+
+    response = client.text_detection(image=image)
+    texts = response.text_annotations
+    ret = list()
+    flag = 0
+    for text in texts:
+        if "\n" in text.description:
+            ret = text.description.split("\n")
+            flag = 1
+    if flag == 0:
+        return 0
+    else:
+        return ret
+    '''
+        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+        items = []
+        lines = {}
+        for text in response.text_annotations:
+            top_x_axis = text.bounding_poly.vertices[0].x
+            top_y_axis = text.bounding_poly.vertices[0].y
+            bottom_y_axis = text.bounding_poly.vertices[3].y
+            if top_y_axis not in lines:
+                lines[top_y_axis] = [(top_y_axis, bottom_y_axis), []]
+            for s_top_y_axis, s_item in lines.items():
+                if top_y_axis < s_item[0][1]:
+                    lines[s_top_y_axis][1].append((top_x_axis, text.description))
+                    break
+        for _, item in lines.items():
+            if item[1]:
+                words = sorted(item[1], key=lambda t: t[0])
+                items.append((item[0], ' '.join([word for _, word in words]), words))
+        #print(items)
+        return response.text_annotations
+        '''
+
+def amazon_text_detect(img):
+    client = boto3.client('rekognition')
     with open(img, 'rb') as image:
         response = client.detect_text(Image={'Bytes': image.read()})
-    #response=client.detect_text(Image={'S3Object':{'Bucket':bucket,'Name':img}})
-    features = ['Calcium', 'Carbohydrate', 'Cholesterol', 'Dietary fiber', 'Energy',
-   'Fat', 'Iron', 'Potassium', 'Proteins', 'Salt', 'Saturated fat',
-   'Sodium', 'Trans fat', 'Vitamin A', 'Vitamin B12 (cobalamin)',
-   'Vitamin B2 (Riboflavin)', 'Vitamin C (ascorbic acid)', 'Vitamin D',
-   'Energy from fat', 'Monounsaturated fat', 'Polyunsaturated fat',
-   'Sugars', 'Vitamin B1 (Thiamin)', 'Vitamin B3 / Vitamin PP (Niacin)',
-   'Vitamin B6 (Pyridoxin)', 'Vitamin B9 (Folic acid)', 'Zinc',
-   'Phosphorus', 'Alcohol', 'Folates (total folates)', 'Magnesium',
-   '&nbsp;  Insoluble fiber', 'Biotin', 'Chromium', 'Copper', 'Iodine',
-   'Manganese', 'Molybdenum',
-   'Pantothenic acid / Pantothenate (Vitamin B5)', 'Selenium', 'Vitamin E',
-   'Vitamin K', '&nbsp;  Soluble fiber', 'Cocoa (minimum)',
-   'Sugar alcohols (Polyols)',
-   '\"Fruits, vegetables and nuts (estimate from ingredients list)\"',
-   '\"Fruits, vegetables and nuts (minimum)\"', 'FIBRA DIETÉTICA', 'Starch',
-   'Caffeine', 'Erythritol', 'Allulose', 'Omega 3 fatty acids',
-   'Omega 6 fatty acids', '&nbsp;  Lactose',
-   'Carbon footprint / CO2 emissions', 'Ecological footprint',
-   'added sugars', '&nbsp;  Alpha-linolenic acid / ALA (18:3 n-3)']
-   #  features = ['Energy from fat','Sodium','Monounsaturated fat','Trans fat','Potassium','Fat','Dietary fiber','Proteins','Calcium','Vitamin A','Iron','Cholesterol','Salt','Energy','Sugars','Carbohydrate','Saturated fat','Vitamin C (ascorbic acid)','Alcohol','Polyunsaturated fat','Vitamin B1 (Thiamin)','Vitamin B6 (Pyridoxin)','Vitamin B9 (Folic acid)','Vitamin B2 (Riboflavin)','Phosphorus','Vitamin B12 (cobalamin)','Magnesium','Vitamin D','Vitamin B3 / Vitamin PP (Niacin)','Zinc','\"Fruits, vegetables and nuts (minimum)\"','Pantothenic acid / Pantothenate (Vitamin B5)','&nbsp;  Lactose','Vitamin E','Cocoa (minimum)','Omega 3 fatty acids','Folates (total folates)','Copper','Chromium','\"Fruits, vegetables and nuts (estimate from ingredients list)\"','Erythritol','&nbsp;  Oleic acid (18:1 n-9)','Selenium','Omega 6 fatty acids','Caffeine','&nbsp;  Soluble fiber','&nbsp;  Insoluble fiber','FIBRA DIÉTETICA','Biotin','Vitamin K','Omega3 DHA (Docosahexaenoic Acid)','Omega3 Other','Omega3 EPA (Eicosapentaenoic Acid)','added sugars','Guarana Seed Extract','Taurine','FIBRA DIETÉTICA','Manganese','Molybdenum','Sugar alcohols (Polyols)','Iodine','Carbon footprint / CO2 emissions','Ecological footprint']
-    textDetections=response['TextDetections']
+    # response=client.detect_text(Image={'S3Object':{'Bucket':bucket,'Name':img}})
+    #  features = ['Energy from fat','Sodium','Monounsaturated fat','Trans fat','Potassium','Fat','Dietary fiber','Proteins','Calcium','Vitamin A','Iron','Cholesterol','Salt','Energy','Sugars','Carbohydrate','Saturated fat','Vitamin C (ascorbic acid)','Alcohol','Polyunsaturated fat','Vitamin B1 (Thiamin)','Vitamin B6 (Pyridoxin)','Vitamin B9 (Folic acid)','Vitamin B2 (Riboflavin)','Phosphorus','Vitamin B12 (cobalamin)','Magnesium','Vitamin D','Vitamin B3 / Vitamin PP (Niacin)','Zinc','\"Fruits, vegetables and nuts (minimum)\"','Pantothenic acid / Pantothenate (Vitamin B5)','&nbsp;  Lactose','Vitamin E','Cocoa (minimum)','Omega 3 fatty acids','Folates (total folates)','Copper','Chromium','\"Fruits, vegetables and nuts (estimate from ingredients list)\"','Erythritol','&nbsp;  Oleic acid (18:1 n-9)','Selenium','Omega 6 fatty acids','Caffeine','&nbsp;  Soluble fiber','&nbsp;  Insoluble fiber','FIBRA DIÉTETICA','Biotin','Vitamin K','Omega3 DHA (Docosahexaenoic Acid)','Omega3 Other','Omega3 EPA (Eicosapentaenoic Acid)','added sugars','Guarana Seed Extract','Taurine','FIBRA DIETÉTICA','Manganese','Molybdenum','Sugar alcohols (Polyols)','Iodine','Carbon footprint / CO2 emissions','Ecological footprint']
+    return response['TextDetections']
+
+def get_text_data(img):
+    textDetections_g = google_recog(img)
+    textDetections_a = amazon_text_detect(img)
     output = {}
     for nutrition in features:
         output[nutrition] = 0
     matches = [0]*len(features)
-    for text in textDetections:
+    for text in textDetections_a:
         if(text["Type"] == 'LINE'):
             fullline = correction(text['DetectedText'])
             line = re.sub(r'[,|-]',r'',fullline)
@@ -240,6 +288,24 @@ def get_test_data(img):
                     output[features[matches.index(max(matches))]] = float(val[0])
                 except:
                     continue
+    for text in textDetections_g:
+        line = re.sub(r'[,|-]',r'',text)
+        matches = [0] * len(features)
+        ll1 = str(line).lower().split(" ")
+        for i in range(len(features)):
+           ll2 = features[i].lower().split(" ")
+           matches[i] = len(list(set(ll1).intersection(ll2)))
+        if max(matches)>0:
+            pattern = r"\d+.*\d* *m?g"
+            numeric_const_pattern = '[-+]? (?: (?: \d* \. \d+ ) | (?: \d+ \.? ) )(?: [Ee] [+-]? \d+ ) ?'
+            rx = re.compile(numeric_const_pattern, re.VERBOSE)
+            try:
+                tot_val = re.search(pattern, line).group()
+                val = rx.findall(tot_val)
+                if output[features[matches.index(max(matches))]] == 0:
+                    output[features[matches.index(max(matches))]] = float(val[0])
+            except:
+                continue
     ret_string = ""
     last_feat = features[-1]
     for feature in output:
@@ -258,7 +324,8 @@ def get_test_data(img):
     f.close()
 
 def prediction(img):
-    get_test_data(img)
+    get_text_data(img)
+    '''
     data = pd.read_csv('Tesseract/output.csv')
     data = data.apply(pd.to_numeric, errors='coerce')
     print('-------------------------- Data columns: --------------------------')
@@ -292,3 +359,6 @@ def prediction(img):
     score = clf.predict(data_prepared)
     print(score[0])
     return score[0]
+    '''
+
+prediction("img.jpg")
